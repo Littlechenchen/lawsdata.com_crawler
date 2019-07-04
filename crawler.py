@@ -4,19 +4,21 @@ import re
 import json
 import selenium
 import time
+import base64
 from selenium.webdriver.common.by import By
 from selenium import webdriver
 from bs4 import BeautifulSoup
-
-SLEEPTIME = 4
-SIGNINCOOKIES = [{'domain': 'www.lawsdata.com', 'httpOnly': True, 'name': 'JSESSIONID', 'path': '/', 'secure': False, 'value': 'A5D4BC768BCA4BDE214857572EEB66BB'}, {'domain': '.lawsdata.com', 'expiry': 1873111441, 'httpOnly': False, 'name': 'gr_user_id', 'path': '/', 'secure': False, 'value': '78e4f45c-ec42-4651-8933-34e3c688070c'}, {'domain': '.lawsdata.com', 'expiry': 1589287441, 'httpOnly': False, 'name': 'Hm_lvt_e484b393f62b648c74a7d2bc1605083c', 'path': '/', 'secure': False, 'value': '1557751400'}, {'domain': '.lawsdata.com', 'expiry': 1557753199, 'httpOnly': False, 'name': 'gr_session_id_9c57f1694d616c90', 'path': '/', 'secure': False, 'value': '1e4d54ed-435b-4248-ac92-ae73dcb029b5'}, {'domain': '.lawsdata.com', 'expiry': 1557753200, 'httpOnly': False, 'name': 'gr_session_id_9c57f1694d616c90_1e4d54ed-435b-4248-ac92-ae73dcb029b5', 'path': '/', 'secure': False, 'value': 'true'}, {'domain': '.lawsdata.com', 'httpOnly': False, 'name': 'Hm_lpvt_e484b393f62b648c74a7d2bc1605083c', 'path': '/', 'secure': False, 'value': '1557751441'}]
+from retrying import retry
+SLEEPTIME = 2
+RANDWAIT_MIN = 1000
+RANDWAIT_MAX = 10000
 
 class LegalDocCrawler():
     def __init__(self, browser):
         self.proxy = None
         self.counter = 0
         self.browser = browser
-        self.browser.implicitly_wait(10)
+        self.browser.implicitly_wait(20)
         self.fileCouter = 0
 
     def instructionalCase_parse(self, htmlText):
@@ -57,9 +59,14 @@ class LegalDocCrawler():
 
         return title, caseFacts, isSimple
         
+    @retry(wait_random_min=RANDWAIT_MIN, wait_random_max=RANDWAIT_MAX)
     def go_url(self, url):
         self.browser.get(url)
-        
+
+    @retry(wait_random_min=1000, wait_random_max=10000)
+    def refresh(self):
+        self.browser.refresh()
+   
     def go_next_page(self):
         '''
         let the crawler load the next page
@@ -70,8 +77,11 @@ class LegalDocCrawler():
                 r.click()
                 return
     
-    def go_pageNo(self, pageNo):                         
-        results = self.browser.find_element_by_id('pageDiv')         
+    def go_pageNo(self, pageNo):   
+        if pageNo > 50:
+            return False
+
+        results = self.browser.find_element_by_id('pageDiv')  
         Nolist = str.split(results.text, '\n')                  
         while pageNo > int(Nolist[-2]):                            
             result = results.find_elements_by_tag_name('a')[-2]  
@@ -202,57 +212,3 @@ class LegalDocCrawler():
         with open(fileName, 'a') as file:
             file.write(json.dumps(dictContent) )
         return
-
-    
-
-if __name__ == "__main__":
-    """
-    temp crawler fun, use python crawler.py to run
-    simple function url http://www.lawsdata.com/?q=eyJtIjoiYWR2YW5jZSIsImEiOnsidGV4dHMiOlt7InR5cGUiOiJhbGwiLCJzdWJUeXBlIjoiIiwidmFsdWUiOiLpgILnlKjnroDmmJPnqIvluo8ifV0sInJlZmVyZW5jZWRUeXBlIjpbIjEwIiwiNjAiXSwiZnV6enlNZWFzdXJlIjoiMCJ9LCJzbSI6eyJ0ZXh0U2VhcmNoIjpbInNpbmdsZSJdLCJsaXRpZ2FudFNlYXJjaCI6WyJwYXJhZ3JhcGgiXX19&s= 
-    normal function url http://www.lawsdata.com/?q=eyJtIjoiYWR2YW5jZSIsImEiOnsidGV4dHMiOlt7InR5cGUiOiJhbGwiLCJzdWJUeXBlIjoiIiwidmFsdWUiOiLpgILnlKjmma7pgJrnqIvluo8ifV0sInJlZmVyZW5jZWRUeXBlIjpbIjEwIiwiNjAiXSwiZnV6enlNZWFzdXJlIjoiMCJ9LCJzbSI6eyJ0ZXh0U2VhcmNoIjpbInNpbmdsZSJdLCJsaXRpZ2FudFNlYXJjaCI6WyJwYXJhZ3JhcGgiXX19&s=
-    """
-    urlDict = {
-        'simpleFun2018':'http://www.lawsdata.com/?q=eyJtIjoiYWR2YW5jZSIsImEiOnsidGV4dHMiOlt7InR5cGUiOiJhbGwiLCJzdWJUeXBlIjoiIiwidmFsdWUiOiLpgILnlKjnroDmmJPnqIvluo8ifV0sImp1ZGdlbWVudFllYXIiOiIyMDE4LTIwMTgiLCJmdXp6eU1lYXN1cmUiOiIwIn0sInNtIjp7InRleHRTZWFyY2giOlsic2luZ2xlIl0sImxpdGlnYW50U2VhcmNoIjpbInBhcmFncmFwaCJdfX0=&s=',
-        'simpleFun2017':'http://www.lawsdata.com/?q=eyJtIjoiYWR2YW5jZSIsImEiOnsidGV4dHMiOlt7InR5cGUiOiJhbGwiLCJzdWJUeXBlIjoiIiwidmFsdWUiOiLpgILnlKjnroDmmJPnqIvluo8ifV0sImp1ZGdlbWVudFllYXIiOiIyMDE3LTIwMTciLCJmdXp6eU1lYXN1cmUiOiIwIn0sInNtIjp7InRleHRTZWFyY2giOlsic2luZ2xlIl0sImxpdGlnYW50U2VhcmNoIjpbInBhcmFncmFwaCJdfX0=&s=',
-        'simpleFun2016':'http://www.lawsdata.com/?q=eyJtIjoiYWR2YW5jZSIsImEiOnsidGV4dHMiOlt7InR5cGUiOiJhbGwiLCJzdWJUeXBlIjoiIiwidmFsdWUiOiLpgILnlKjnroDmmJPnqIvluo8ifV0sImp1ZGdlbWVudFllYXIiOiIyMDE2LTIwMTYiLCJmdXp6eU1lYXN1cmUiOiIwIn0sInNtIjp7InRleHRTZWFyY2giOlsic2luZ2xlIl0sImxpdGlnYW50U2VhcmNoIjpbInBhcmFncmFwaCJdfX0=&s=',
-        'normalFun2018':'http://www.lawsdata.com/?q=eyJtIjoiYWR2YW5jZSIsImEiOnsidGV4dHMiOlt7InR5cGUiOiJhbGwiLCJzdWJUeXBlIjoiIiwidmFsdWUiOiLmma7pgJrnqIvluo8ifV0sImp1ZGdlbWVudFllYXIiOiIyMDE4LTIwMTgiLCJmdXp6eU1lYXN1cmUiOjB9LCJzbSI6eyJ0ZXh0U2VhcmNoIjpbInNpbmdsZSJdLCJsaXRpZ2FudFNlYXJjaCI6WyJwYXJhZ3JhcGgiXX19&s='
-    }
-    target_name = 'normalFun2018'
-    fileName = target_name+'.json'
-    url = urlDict[target_name ]
-    use_cookie = True
-    with open(fileName, 'a', encoding='utf-8') as f:
-        idCraw = LegalDocCrawler(webdriver.Chrome() )
-        doCraw = LegalDocCrawler(webdriver.Chrome() )
-        idCraw.go_url(url)
-        doCraw.go_url(url)
-        if use_cookie:
-            # 利用cookie加载登录信息
-            for ck in SIGNINCOOKIES:
-                idCraw.browser.add_cookie(ck)
-                doCraw.browser.add_cookie(ck)
-            idCraw.go_url(url)
-            doCraw.go_url(url)
-        
-        else:
-            # 手动登陆账号
-            time.sleep(30)
-
-        while doCraw.counter < 500000:
-            crawList = idCraw.get_all_pageidName()
-            print('crawling page No.{}.\nHave Finished {} docs'.format(idCraw.get_currentPageNo(), doCraw.counter ) ) 
-            idCraw.go_next_page()
-            idCraw.counter += 1
-
-            for idName in crawList:
-                doCraw.go_legalDoc_page(idName[0] )
-                #time.sleep(2)
-                pageContent = doCraw.legaldoc_dict_parse(idName[0], idName[1])
-                f.write(json.dumps(pageContent, ensure_ascii=False)+'\n')
-                print('Finish docId:{}: {}'.format(idName[0], idName[1]))
-                #time.sleep(SLEEPTIME)
-            doCraw.counter += 10
-            
-        doCraw.browser.quit()
-        idCraw.browser.quit()
-
