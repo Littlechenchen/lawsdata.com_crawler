@@ -1,0 +1,1 @@
+# This is a simple crawler to get data from lawsdata.com & transfer them into json format
